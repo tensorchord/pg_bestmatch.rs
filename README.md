@@ -1,65 +1,46 @@
 # pg_bestmatch
 
-## Usage
+This PostgreSQL extension provides functionalities for BM25 text queries, allowing efficient full-text search by converting text into sparse vectors. This enables integration with vector search extensions such as `pgvecto.rs` or `pgvector`.
 
-If you have a table,
-
-```sql
-DROP TABLE IF EXISTS t CASCADE;
-CREATE TABLE t(doc TEXT NOT NULL);
-
-INSERT INTO t(doc) VALUES
-('this is a pen'),
-('this is an apple'),
-('this is a pen this is a pen'),
-('this is an apple this is an apple'),
-('those are pens'),
-('those are apples'),
-('those are pens those are pens'),
-('those are apples those are apples');
-```
-
-If you want to search for documents by queries with BM25 algorithm, you could:
+## Installation
 
 ```sql
-SELECT bm25_create('t', 'doc', 't_doc_bm25');
-
-ALTER TABLE t ADD COLUMN embedding svector;
-UPDATE t SET embedding = document_to_svector('t_doc_bm25', doc)::svector;
+CREATE EXTENSION pg_bestmatch;
+SET search_path TO public, bm_catalog;
 ```
 
-You could search for documents in this way:
+## Build from source
 
-```sql
-SELECT doc FROM t ORDER BY embedding <#> query_to_svector('t_doc_bm25', 'i have an apple')::svector;
-```
+Before building, you should have `PostgreSQL`, `Rust` and `Cargo` installed on your system.
 
-The statistics data used for BM25 is not updated on time. If you want to refresh it, you could:
-
-```sql
-SELECT bm25_refresh('t_doc_bm25');
-```
-
-If you do not use BM25 for a text column any more, you could delete the statistics data:
-
-```sql
-SELECT bm25_drop('t_doc_bm25');
-```
-
-In order to speed searching, you could create vector indexes.
-
-```sql
--- you need to set type of column `doc` mannually everytime after `bm25_refresh` is executed
-CREATE INDEX ON t USING vectors (doc svector_dot_ops);
-```
-
-## Benchmarking on LoCO
-
-This extension is benchmarked on the [Stanford LoCo benchmark](https://hazyresearch.stanford.edu/blog/2024-01-11-m2-bert-retrieval).
+1. Install `cargo-pgrx`.
 
 ```sh
-wget https://huggingface.co/api/datasets/hazyresearch/LoCoV1-Documents/parquet/default/test/0.parquet -o documents.parquet
-wget https://huggingface.co/api/datasets/hazyresearch/LoCoV1-Queries/parquet/default/test/0.parquet -o queries.parquet
+cargo install cargo-pgrx --version v0.12.0-alpha.1
+```
+
+2. Initialize `cargo-pgrx`.
+
+```sh
+cargo pgrx init --pg16=$(which pg_config)   # assuming that you have PostgreSQL 16 installed
+```
+
+3. Build.
+
+```sh
+cargo pgrx install --release    # if you want to install it on your machine
+cargo pgrx package  # if you want to package `pg_bestmatch`
+```
+
+## Usage
+
+Here is an example workflow demonstrating the usage of this extension with the example of [Stanford LoCo benchmark](https://hazyresearch.stanford.edu/blog/2024-01-11-m2-bert-retrieval).
+
+0. Load the dataset. Here is a script for you if you want to experience `pg_bestmatch` with the dataset.
+
+```sh
+wget https://huggingface.co/api/datasets/hazyresearch/LoCoV1-Documents/parquet/default/test/0.parquet -O documents.parquet
+wget https://huggingface.co/api/datasets/hazyresearch/LoCoV1-Queries/parquet/default/test/0.parquet -O queries.parquet
 ```
 
 ```python
@@ -89,7 +70,7 @@ register_adapter(np.float32, adapter_numpy_float32)
 register_adapter(np.int32, adapter_numpy_int32)
 register_adapter(np.ndarray, adapter_numpy_array)
 
-db_url = "postgresql://localhost:5432/usamoi"
+db_url = "postgresql://localhost:5432/pg_bestmatch_test"
 engine = create_engine(db_url)
 
 def load_documents():
@@ -105,20 +86,96 @@ load_documents()
 load_queries()
 ```
 
+1. Create BM25 statistics for the `documents` table.
+
 ```sql
-CREATE EXTENSION pg_bestmatch;
-
 SELECT bm25_create('documents', 'passage', 'documents_passage_bm25', 0.75, 1.2);
+```
 
-ALTER TABLE documents ADD COLUMN embedding svector;
+2. Add an embedding column to the `documents` and `queries` tables and update the embeddings for documents and queries.
 
-ALTER TABLE queries ADD COLUMN embedding svector;
+```sql
+ALTER TABLE documents ADD COLUMN embedding svector; -- for pgvecto.rs users
+ALTER TABLE documents ADD COLUMN embedding sparsevec; -- for pgvector users
 
-UPDATE documents SET embedding = bm25_document_to_svector('documents_passage_bm25', passage)::svector;
+UPDATE documents SET embedding = bm25_document_to_svector('documents_passage_bm25', passage)::svector; -- for pgvecto.rs users
+UPDATE documents SET embedding = bm25_document_to_svector('documents_passage_bm25', passage, 'pgvector')::sparsevec; -- for pgvector users
+```
 
-UPDATE queries SET embedding = bm25_query_to_svector('documents_passage_bm25', query)::svector;
+3. (Optional) Create a vector index on the sparse vector column.
+
+```sql
+CREATE INDEX ON documents USING vectors (embedding svector_dot_ops); -- for pgvecto.rs users
+CREATE INDEX ON documents USING ivfflat (embedding sparsevec_ip_ops); -- for pgvector users
+```
+
+4. Perform a vector search to find the most relevant documents for each query.
+
+```sql
+ALTER TABLE queries ADD COLUMN embedding svector; -- for pgvecto.rs users
+ALTER TABLE queries ADD COLUMN embedding sparsevec; -- for pgvector users
+
+UPDATE queries SET embedding = bm25_query_to_svector('documents_passage_bm25', query)::svector; -- for pgvecto.rs users
+UPDATE queries SET embedding = bm25_query_to_svector('documents_passage_bm25', query, 'pgvector')::sparsevec; -- for pgvector users
 
 SELECT sum((array[answer_pids] = array(SELECT pid FROM documents WHERE queries.dataset = documents.dataset ORDER BY queries.embedding <#> documents.embedding LIMIT 1))::int) FROM queries;
 ```
 
-Top 1 recall: 0.77411430049133695371.
+This workflow showcases how to leverage BM25 text queries and vector search in PostgreSQL using this extension. The Top 1 recall of BM25 on this dataset is `0.77`. If you reproduce the result, your operations are correct.
+
+## Reference
+
+- `tokenize`
+  - Description: Tokenizes an input string into individual tokens.
+  - Example:
+    ```sql
+    SELECT tokenize('i have an apple'); -- result: {i,have,an,apple}
+    ```
+- `bm25_create`
+  - Description: Creates BM25 statistics for a specified table and column.
+  - Usage: 
+    ```sql
+    SELECT bm25_create('documents', 'passage', 'documents_passage_bm25');
+    ```
+  - Parameters:
+    - `table_name`: Name of the table.
+    - `column_name`: Name of the column.
+    - `stat_name`: Name of the BM25 statistics.
+    - `b`: BM25 parameter (default 0.75).
+    - `k`: BM25 parameter (default 1.2).
+- `bm25_refresh`
+  - Description: Updates the BM25 statistics to reflect any changes in the underlying data.
+  - Usage:
+    ```sql
+    SELECT bm25_refresh('documents_passage_bm25');
+    ```
+  - Parameters:
+    - `stat_name`: Name of the BM25 statistics to update.
+- `bm25_drop`
+  - Description: Deletes the BM25 statistics for a specified table and column.
+  - Usage:
+    ```sql
+    SELECT bm25_drop('documents_passage_bm25');
+    ```
+  - Parameters:
+    - `stat_name`: Name of the BM25 statistics to delete.
+- `bm25_document_to_svector`
+  - Description: Converts document text into a sparse vector representation.
+  - Usage:
+    ```sql
+    SELECT bm25_document_to_svector('documents_passage_bm25', 'document_text');
+    ```
+  - Parameters:
+    - `stat_name`: Name of the BM25 statistics.
+    - `document_text`: The text of the document.
+    - `style`: Emits `pgvecto.rs`-style sparse vector or `pgvector`-style sparse vector.
+- `bm25_query_to_svector`
+  - Description: Converts query text into a sparse vector representation.
+  - Usage:
+    ```sql
+    SELECT bm25_query_to_svector('documents_passage_bm25', 'We begin, as always, with the text.');
+    ```
+  - Parameters:
+    - `stat_name`: Name of the BM25 statistics.
+    - `query_text`: The text of the query.
+    - `style`: Emits `pgvecto.rs`-style sparse vector or `pgvector`-style sparse vector.
