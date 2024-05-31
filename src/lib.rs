@@ -1,10 +1,4 @@
-use std::collections::BTreeMap;
-use std::ffi::CString;
-use std::sync::LazyLock;
-use tokenizers::*;
-
 pgrx::pg_module_magic!();
-pgrx::extension_sql_file!("./sql/bootstrap.sql", bootstrap);
 pgrx::extension_sql_file!("./sql/finalize.sql", finalize);
 
 #[cfg(not(all(target_endian = "little", target_pointer_width = "64")))]
@@ -23,19 +17,11 @@ compiler_error!("PostgreSQL version must be selected.");
 #[pgrx::pg_guard]
 unsafe extern "C" fn _PG_init() {}
 
-static BERT_BASE_UNCASED: LazyLock<Tokenizer> = LazyLock::new(|| {
-    Tokenizer::from_bytes(include_bytes!("../tokenizer/bert_base_uncased.json")).unwrap()
-});
-
-#[pgrx::pg_extern(immutable, strict, parallel_safe)]
-pub fn bestmatch_template(tab: &str, col: &str, mat: &str) -> String {
-    format!(
-        include_str!("./sql/template.sql"),
-        tab = tab,
-        col = col,
-        mat = mat
-    )
-}
+static BERT_BASE_UNCASED_BYTES: &[u8] = include_bytes!("../tokenizer/bert_base_uncased.json");
+static BERT_BASE_UNCASED: std::sync::LazyLock<tokenizers::Tokenizer> =
+    std::sync::LazyLock::new(|| {
+        tokenizers::Tokenizer::from_bytes(BERT_BASE_UNCASED_BYTES).unwrap()
+    });
 
 #[pgrx::pg_extern(immutable, strict, parallel_safe)]
 pub fn tokenize(t: &str) -> Vec<String> {
@@ -48,15 +34,15 @@ pub fn tokenize(t: &str) -> Vec<String> {
 
 #[derive(Debug)]
 #[repr(C)]
-struct Row {
+struct RecordMat {
     token: [u8; 64],
     id: i32,
     how_many_tokens: i32,
-    token_in_how_many_inputs: i32,
+    idf: f32,
 }
 
 #[pgrx::pg_extern(strict, parallel_safe)]
-pub fn document_to_svector_internal(
+pub fn bm25_document_to_svector_internal(
     mat: pgrx::pg_sys::Oid,
     idx: pgrx::pg_sys::Oid,
     b: f32,
@@ -66,11 +52,13 @@ pub fn document_to_svector_internal(
     dims: i32,
     t: &str,
 ) -> String {
+    use std::collections::BTreeMap;
     let tokens = tokenize(t);
     let mut x = BTreeMap::<u32, u32>::new();
     unsafe {
         use pgrx::pg_sys::*;
         use std::collections::btree_map::Entry;
+        use std::ffi::CString;
         let heap = table_open(mat, AccessShareLock as _);
         let index = index_open(idx, AccessShareLock as _);
         let slot = MakeSingleTupleTableSlot((*heap).rd_att, table_slot_callbacks(heap));
@@ -94,7 +82,7 @@ pub fn document_to_svector_internal(
                         .t_data
                         .cast::<u8>()
                         .add((*(*tuple).t_data).t_hoff as _)
-                        .cast::<Row>();
+                        .cast::<RecordMat>();
                     let id = (*row).id as u32;
                     match x.entry(id) {
                         Entry::Vacant(e) => {
@@ -133,21 +121,18 @@ pub fn document_to_svector_internal(
 }
 
 #[pgrx::pg_extern(strict, parallel_safe)]
-pub fn query_to_svector_internal(
+pub fn bm25_query_to_svector_internal(
     mat: pgrx::pg_sys::Oid,
     idx: pgrx::pg_sys::Oid,
-    b: f32,
-    k1: f32,
-    words: i32,
-    docs: i32,
     dims: i32,
     t: &str,
 ) -> String {
-    let _ = (b, k1, words);
+    use std::collections::BTreeMap;
     let tokens = tokenize(t);
-    let mut x = BTreeMap::<u32, u32>::new();
+    let mut x = BTreeMap::<u32, f32>::new();
     unsafe {
         use pgrx::pg_sys::*;
+        use std::ffi::CString;
         let heap = table_open(mat, AccessShareLock as _);
         let index = index_open(idx, AccessShareLock as _);
         let slot = MakeSingleTupleTableSlot((*heap).rd_att, table_slot_callbacks(heap));
@@ -171,10 +156,10 @@ pub fn query_to_svector_internal(
                         .t_data
                         .cast::<u8>()
                         .add((*(*tuple).t_data).t_hoff as _)
-                        .cast::<Row>();
+                        .cast::<RecordMat>();
                     let id = (*row).id as u32;
-                    let token_in_how_many_inputs = (*row).token_in_how_many_inputs as u32;
-                    x.insert(id, token_in_how_many_inputs);
+                    let idf = (*row).idf;
+                    x.insert(id, idf);
                     if should_free {
                         pfree(tuple.cast());
                     }
@@ -186,12 +171,11 @@ pub fn query_to_svector_internal(
         index_close(index, AccessShareLock as _);
         table_close(heap, AccessShareLock as _);
     }
-    let f = |value| ((docs + 1) as f32 / (value as f32 + 0.5)).ln();
     // https://github.com/pinecone-io/pinecone-text/issues/69
-    let sum = x.values().copied().map(f).sum::<f32>();
+    let sum = x.values().copied().sum::<f32>();
     let mut result = "{".to_string();
     for (index, value) in x.into_iter() {
-        let value = f(value) / sum;
+        let value = value / sum;
         result.push_str(&format!("{index}:{value}, "));
     }
     if result.ends_with(", ") {
