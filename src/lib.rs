@@ -40,6 +40,7 @@ struct RecordMat {
     idf: f32,
 }
 
+#[allow(clippy::too_many_arguments)]
 #[pgrx::pg_extern(strict, parallel_safe)]
 pub fn bm25_document_to_svector_internal(
     mat: pgrx::pg_sys::Oid,
@@ -110,7 +111,7 @@ pub fn bm25_document_to_svector_internal(
             let mut result = "{".to_string();
             for (index, value) in x.into_iter() {
                 let value = value as f32 / (value as f32 + k1 * ((1.0 - b) + b * (length / avgdl)));
-                result.push_str(&format!("{}:{value}, ", index + 0));
+                result.push_str(&format!("{}:{value}, ", index));
             }
             if result.ends_with(", ") {
                 result.pop();
@@ -200,7 +201,7 @@ pub fn bm25_query_to_svector_internal(
             let sum = x.values().copied().sum::<f32>();
             let mut result = "{".to_string();
             for (index, value) in x.into_iter() {
-                result.push_str(&format!("{}:{}, ", index + 0, value / sum));
+                result.push_str(&format!("{}:{}, ", index, value / sum));
             }
             if result.ends_with(", ") {
                 result.pop();
