@@ -51,6 +51,7 @@ pub fn bm25_document_to_svector_internal(
     docs: i32,
     dims: i32,
     t: &str,
+    style: &str,
 ) -> String {
     use std::collections::BTreeMap;
     let tokens = tokenize(t);
@@ -70,7 +71,7 @@ pub fn bm25_document_to_svector_internal(
                     &mut key,
                     /* attr 1 */ 1,
                     pgrx::pg_sys::BTEqualStrategyNumber as _,
-                    /* pgrx::pg_sys::F_NAMEEQ */ 62.into(),
+                    pgrx::pg_sys::F_NAMEEQ.into(),
                     token.as_ptr().into(),
                 );
                 index_rescan(scan, &mut key, 1, std::ptr::null_mut(), 0);
@@ -103,21 +104,43 @@ pub fn bm25_document_to_svector_internal(
         index_close(index, AccessShareLock as _);
         table_close(heap, AccessShareLock as _);
     }
-    let avgdl = words as f32 / docs as f32;
-    let length = x.values().sum::<u32>() as f32;
-    let mut result = "{".to_string();
-    for (index, value) in x.into_iter() {
-        let value = value as f32 / (value as f32 + k1 * ((1.0 - b) + b * (length / avgdl)));
-        result.push_str(&format!("{index}:{value}, "));
+    match style {
+        "pgvecto.rs" => {
+            let avgdl = words as f32 / docs as f32;
+            let length = x.values().sum::<u32>() as f32;
+            let mut result = "{".to_string();
+            for (index, value) in x.into_iter() {
+                let value = value as f32 / (value as f32 + k1 * ((1.0 - b) + b * (length / avgdl)));
+                result.push_str(&format!("{}:{value}, ", index + 0));
+            }
+            if result.ends_with(", ") {
+                result.pop();
+                result.pop();
+            }
+            result.push('}');
+            result.push('/');
+            result.push_str(&dims.to_string());
+            result
+        }
+        "pgvector" => {
+            let avgdl = words as f32 / docs as f32;
+            let length = x.values().sum::<u32>() as f32;
+            let mut result = "{".to_string();
+            for (index, value) in x.into_iter() {
+                let value = value as f32 / (value as f32 + k1 * ((1.0 - b) + b * (length / avgdl)));
+                result.push_str(&format!("{}:{value}, ", index + 1));
+            }
+            if result.ends_with(", ") {
+                result.pop();
+                result.pop();
+            }
+            result.push('}');
+            result.push('/');
+            result.push_str(&dims.to_string());
+            result
+        }
+        _ => pgrx::error!("unknown svector style: {}", style),
     }
-    if result.ends_with(", ") {
-        result.pop();
-        result.pop();
-    }
-    result.push('}');
-    result.push('/');
-    result.push_str(&dims.to_string());
-    result
 }
 
 #[pgrx::pg_extern(strict, parallel_safe)]
@@ -126,6 +149,7 @@ pub fn bm25_query_to_svector_internal(
     idx: pgrx::pg_sys::Oid,
     dims: i32,
     t: &str,
+    style: &str,
 ) -> String {
     use std::collections::BTreeMap;
     let tokens = tokenize(t);
@@ -144,7 +168,7 @@ pub fn bm25_query_to_svector_internal(
                     &mut key,
                     /* attr 1 */ 1,
                     pgrx::pg_sys::BTEqualStrategyNumber as _,
-                    /* pgrx::pg_sys::F_NAMEEQ */ 62.into(),
+                    pgrx::pg_sys::F_NAMEEQ.into(),
                     token.as_ptr().into(),
                 );
                 index_rescan(scan, &mut key, 1, std::ptr::null_mut(), 0);
@@ -171,19 +195,39 @@ pub fn bm25_query_to_svector_internal(
         index_close(index, AccessShareLock as _);
         table_close(heap, AccessShareLock as _);
     }
-    // https://github.com/pinecone-io/pinecone-text/issues/69
-    let sum = x.values().copied().sum::<f32>();
-    let mut result = "{".to_string();
-    for (index, value) in x.into_iter() {
-        let value = value / sum;
-        result.push_str(&format!("{index}:{value}, "));
+    match style {
+        "pgvecto.rs" => {
+            // https://github.com/pinecone-io/pinecone-text/issues/69
+            let sum = x.values().copied().sum::<f32>();
+            let mut result = "{".to_string();
+            for (index, value) in x.into_iter() {
+                result.push_str(&format!("{}:{}, ", index + 0, value / sum));
+            }
+            if result.ends_with(", ") {
+                result.pop();
+                result.pop();
+            }
+            result.push('}');
+            result.push('/');
+            result.push_str(&dims.to_string());
+            result
+        }
+        "pgvector" => {
+            // https://github.com/pinecone-io/pinecone-text/issues/69
+            let sum = x.values().copied().sum::<f32>();
+            let mut result = "{".to_string();
+            for (index, value) in x.into_iter() {
+                result.push_str(&format!("{}:{}, ", index + 1, value / sum));
+            }
+            if result.ends_with(", ") {
+                result.pop();
+                result.pop();
+            }
+            result.push('}');
+            result.push('/');
+            result.push_str(&dims.to_string());
+            result
+        }
+        _ => pgrx::error!("unknown svector style: {}", style),
     }
-    if result.ends_with(", ") {
-        result.pop();
-        result.pop();
-    }
-    result.push('}');
-    result.push('/');
-    result.push_str(&dims.to_string());
-    result
 }

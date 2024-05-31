@@ -92,7 +92,7 @@ BEGIN
 END;
 $fn$ LANGUAGE plpgsql;
 
-CREATE FUNCTION bm25_document_to_svector(mat regclass, t TEXT) RETURNS text STABLE STRICT PARALLEL SAFE AS $fn$
+CREATE FUNCTION bm25_document_to_svector(mat regclass, t TEXT, style TEXT DEFAULT 'pgvecto.rs') RETURNS text STABLE STRICT PARALLEL SAFE AS $fn$
 DECLARE
     idx regclass;
     p_b REAL;
@@ -102,16 +102,16 @@ DECLARE
     p_dims INT;
 BEGIN
     SELECT indexrelid, b, k1, words, docs, dims INTO idx, p_b, p_k1, p_words, p_docs, p_dims FROM bm_catalog.pg_bm25 WHERE matrelid = mat;
-    RETURN bm_catalog.bm25_document_to_svector_internal(mat::oid, idx::oid, p_b, p_k1, p_words, p_docs, p_dims, t);
+    RETURN bm_catalog.bm25_document_to_svector_internal(mat::oid, idx::oid, p_b, p_k1, p_words, p_docs, p_dims, t, style);
 END;
 $fn$ LANGUAGE plpgsql;
 
-CREATE FUNCTION bm25_query_to_svector(mat regclass, t TEXT) RETURNS text STABLE STRICT PARALLEL SAFE AS $fn$
+CREATE FUNCTION bm25_query_to_svector(mat regclass, t TEXT, style TEXT DEFAULT 'pgvecto.rs') RETURNS text STABLE STRICT PARALLEL SAFE AS $fn$
 DECLARE
     idx regclass;
     p_dims INT;
 BEGIN
     SELECT indexrelid, dims INTO idx, p_dims FROM bm_catalog.pg_bm25 WHERE matrelid = mat;
-    RETURN bm_catalog.bm25_query_to_svector_internal(mat::oid, idx::oid, p_dims, t);
+    RETURN bm_catalog.bm25_query_to_svector_internal(mat::oid, idx::oid, p_dims, t, style);
 END;
 $fn$ LANGUAGE plpgsql;
