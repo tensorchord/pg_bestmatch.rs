@@ -58,7 +58,7 @@ jobs:
           sudo apt-get install -y postgresql-${{ matrix.version }} postgresql-server-dev-${{ matrix.version }}
       - name: Set up Pgrx
         run: |
-          cargo install cargo-pgrx --branch v0.12.0-alpha.1-patch2 --git https://github.com/tensorchord/pgrx.git
+          cargo install cargo-pgrx --debug --branch v0.12.0-alpha.1-patch2 --git https://github.com/tensorchord/pgrx.git
           cargo pgrx init --pg${{ matrix.version }}=$(which pg_config)
       - name: Clippy
         run: cargo clippy --lib --features "pg${{ matrix.version }}"
