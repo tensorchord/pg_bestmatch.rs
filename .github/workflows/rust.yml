@@ -39,10 +39,6 @@ jobs:
       matrix:
         version: [12, 13, 14, 15, 16]
     runs-on: ubuntu-latest
-    env:
-      SEMVER: "0.0.0"
-      VERSION: ${{ matrix.version }}
-      ARCH: ${{ matrix.arch }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,9 +50,17 @@ jobs:
           sudo apt-get install -y build-essential
       - name: Set up Sccache
         uses: mozilla-actions/sccache-action@v0.0.4
+      - name: Set up PostgreSQL
+        run: |
+          sudo apt-get install -y postgresql-common
+          echo | sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
+          sudo apt update
+          sudo apt-get install -y postgresql-${{ matrix.version }} postgresql-server-dev-${{ matrix.version }}
       - name: Set up Pgrx
-        run: cargo install cargo-pgrx --branch v0.12.0-alpha.1-patch2 --git https://github.com/tensorchord/pgrx.git
+        run: |
+          cargo install cargo-pgrx --branch v0.12.0-alpha.1-patch2 --git https://github.com/tensorchord/pgrx.git
+          cargo pgrx init --pg${{ matrix.version }}=$(which pg_config)
       - name: Clippy
-        run: cargo clippy --features "pg$VERSION"
+        run: cargo clippy --lib --features "pg${{ matrix.version }}"
       - name: Build
-        run: cargo build --lib --features "pg$VERSION"
+        run: cargo build --lib --features "pg${{ matrix.version }}"
