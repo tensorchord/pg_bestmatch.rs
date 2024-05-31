@@ -626,6 +626,7 @@ dependencies = [
 name = "pg_bestmatch"
 version = "0.0.0"
 dependencies = [
+ "lazy_static",
  "pgrx",
  "rand",
  "tokenizers",

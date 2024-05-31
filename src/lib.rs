@@ -18,10 +18,9 @@ compiler_error!("PostgreSQL version must be selected.");
 unsafe extern "C" fn _PG_init() {}
 
 static BERT_BASE_UNCASED_BYTES: &[u8] = include_bytes!("../tokenizer/bert_base_uncased.json");
-static BERT_BASE_UNCASED: std::sync::LazyLock<tokenizers::Tokenizer> =
-    std::sync::LazyLock::new(|| {
-        tokenizers::Tokenizer::from_bytes(BERT_BASE_UNCASED_BYTES).unwrap()
-    });
+lazy_static::lazy_static! {
+    static ref BERT_BASE_UNCASED: tokenizers::Tokenizer = tokenizers::Tokenizer::from_bytes(BERT_BASE_UNCASED_BYTES).unwrap();
+}
 
 #[pgrx::pg_extern(immutable, strict, parallel_safe)]
 pub fn tokenize(t: &str) -> Vec<String> {
