@@ -5,4 +5,8 @@ extend-ignore-re = [
 ]
 
 [files]
-extend-exclude = ["tokenizer/*.json"]
+extend-exclude = [
+    "tokenizer/*.json",
+    "vendor/pg_config/*.txt",
+    "vendor/pgrx_binding/*.rs",
+]
