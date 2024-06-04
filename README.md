@@ -145,7 +145,7 @@ cargo pgrx package  # if you want to package `pg_bestmatch`
 ```
 
 ## Comparison with pg_search 
-- `pg_bestmatch.rs` only provides methods for generating sparse vectors and does not support index-based search (which can be acheived by pgvecto.rs or pgvector). 
+- `pg_bestmatch.rs` only provides methods for generating sparse vectors and does not support index-based search (which can be achieved by pgvecto.rs or pgvector). 
 - `pg_search` performs BM25 retrieval via the external `tantivy` engine, which may have limitations when combined with transactions, filters, or JOIN operations. Since `pg_bestmatch.rs` is entirely native to Postgres, it offers full compatibility with these operations inside postgres.
 
 ## Reference
