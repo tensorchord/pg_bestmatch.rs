@@ -9,8 +9,10 @@ User can use vector search extensions such as `pgvecto.rs` or `pgvector` for eff
 
 
 * [Installation](#installation)
+* [How does it work?](#how-does-it-work)
 * [Usage](#usage)
-* [Build from source](#Build-from-source)
+* [Build from source](#build-from-source)
+* [Comparison with pg_search](#comparison-with-pg_search)
 * [Reference](#Reference)
 
 ## Installation
