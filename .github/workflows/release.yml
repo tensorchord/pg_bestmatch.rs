@@ -60,6 +60,7 @@ jobs:
           sudo apt-get install -y build-essential crossbuild-essential-arm64
           sudo apt-get install -y qemu-user-static
           echo 'target.aarch64-unknown-linux-gnu.linker = "aarch64-linux-gnu-gcc"' | tee ~/.cargo/config.toml
+          rustup target add aarch64-unknown-linux-gnu
       - name: Set up Sccache
         uses: mozilla-actions/sccache-action@v0.0.4
       - name: Set up Cache
@@ -71,12 +72,6 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
           key: ${{ github.job }}-${{ hashFiles('./Cargo.lock') }}-${{ matrix.version }}-${{ matrix.arch }}
-      - name: Set up Clang-16
-        run: |
-          sudo sh -c 'echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-16 main" >> /etc/apt/sources.list'
-          wget --quiet -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          sudo apt-get update
-          sudo apt-get install -y clang-16
       - name: Set up Pgrx
         run: |
           # pg_config
@@ -92,8 +87,8 @@ jobs:
           echo PGRX_TARGET_INFO_PATH_PG$VERSION=$HOME/.pgrx_binding >> "$GITHUB_ENV"
       - name: Build
         run: |
-          cargo build --lib --no-default-features --features pg$VERSION --release --target $ARCH-unknown-linux-gnu
-          ./tools/schema.sh --no-default-features --features pg$VERSION --release --target $ARCH-unknown-linux-gnu | expand -t 4 > ./target/pg_bestmatch--$SEMVER.sql
+          cargo build --lib --features pg$VERSION --release --target $ARCH-unknown-linux-gnu
+          ./tools/schema.sh --features pg$VERSION --release --target $ARCH-unknown-linux-gnu | expand -t 4 > ./target/pg_bestmatch--$SEMVER.sql
       - name: Package
         run: |
           export PLATFORM=$(echo $ARCH | sed 's/aarch64/arm64/; s/x86_64/amd64/')
@@ -105,7 +100,7 @@ jobs:
           export TAG=${{ github.event.inputs.tag }}
           export PLATFORM=$(echo $ARCH | sed 's/aarch64/arm64/; s/x86_64/amd64/')
           gh release upload --clobber $TAG ./build/pg_bestmatch-pg${VERSION}_${ARCH}-unknown-linux-gnu_${SEMVER}.zip
-          gh release upload --clobber $TAG ./build/pg_bestmatch-pg${VERSION}_${SEMVER}_${PLATFORM}.deb
+          gh release upload --clobber $TAG ./build/postgresql-${VERSION}-pg-bestmatch_${SEMVER}_${PLATFORM}.deb
       - name: Post Set up Cache
         uses: actions/cache/save@v4
         if: ${{ !steps.cache.outputs.cache-hit }}

@@ -40,6 +40,6 @@ code=$(mktemp)
 chmod 700 $code
 CONTROL_FILEPATH="./pg_bestmatch.control" SO_FILEPATH="$DIR/libpg_bestmatch.so" $(dirname "$0")/schema-codegen.sh >> $code
 
-PGRX_EMBED=$code cargo rustc --bin pgrx_embed_vectors "$@" -- --cfg pgrx_embed
+PGRX_EMBED=$code cargo rustc --bin pgrx_embed_pg_bestmatch "$@" -- --cfg pgrx_embed
 
-CARGO_PKG_VERSION="0.0.0" QEMU_LD_PREFIX=$QEMU_LD_PREFIX "${RUNNER[@]}" "$DIR/pgrx_embed_vectors" | expand -t 4
+CARGO_PKG_VERSION="0.0.0" QEMU_LD_PREFIX=$QEMU_LD_PREFIX "${RUNNER[@]}" "$DIR/pgrx_embed_pg_bestmatch" | expand -t 4
