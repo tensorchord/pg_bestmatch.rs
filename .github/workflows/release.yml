@@ -1,28 +1,16 @@
-name: Rust
+name: Release
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - ".cargo/**"
-      - ".github/**"
-      - "src/**"
-      - "Cargo.lock"
-      - "Cargo.toml"
-      - "pg_bestmatch.control"
-      - "vendor/**"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - ".cargo/**"
-      - ".github/**"
-      - "src/**"
-      - "Cargo.lock"
-      - "Cargo.toml"
-      - "pg_bestmatch.control"
-      - "vendor/**"
-  merge_group:
   workflow_dispatch:
+    inputs:
+      version:
+        type: string
+        description: Version
+        required: true
+      tag:
+        type: string
+        description: Tag
+        required: true
 
 concurrency:
   group: ${{ github.ref }}-${{ github.workflow }}
@@ -35,17 +23,32 @@ env:
   RUSTC_WRAPPER: sccache
   RUSTFLAGS: "-Dwarnings"
 
+permissions:
+  contents: write
+  pull-requests: read
+
 jobs:
-  check:
+  semver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const r = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
+            if (!r.test("${{ github.event.inputs.version }}")) {
+              core.setFailed(`Action failed with an invalid semver.`);
+            }
+  binary:
     strategy:
       matrix:
         version: [12, 13, 14, 15, 16]
-        arch: ["x86_64"]
-    runs-on: ubuntu-latest
+        arch: ["x86_64", "aarch64"]
+    runs-on: ubuntu-20.04
     env:
-      SEMVER: "0.0.0"
+      SEMVER: ${{ github.event.inputs.version }}
       VERSION: ${{ matrix.version }}
       ARCH: ${{ matrix.arch }}
+    needs: ["semver"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,9 +59,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential crossbuild-essential-arm64
           sudo apt-get install -y qemu-user-static
-          touch ~/.cargo/config.toml
-          echo 'target.aarch64-unknown-linux-gnu.linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
-          echo 'target.aarch64-unknown-linux-gnu.runner = ["qemu-aarch64-static", "-L", "/usr/aarch64-linux-gnu"]' >> ~/.cargo/config.toml
+          echo 'target.aarch64-unknown-linux-gnu.linker = "aarch64-linux-gnu-gcc"' | tee ~/.cargo/config.toml
       - name: Set up Sccache
         uses: mozilla-actions/sccache-action@v0.0.4
       - name: Set up Cache
@@ -70,6 +71,12 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
           key: ${{ github.job }}-${{ hashFiles('./Cargo.lock') }}-${{ matrix.version }}-${{ matrix.arch }}
+      - name: Set up Clang-16
+        run: |
+          sudo sh -c 'echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-16 main" >> /etc/apt/sources.list'
+          wget --quiet -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          sudo apt-get update
+          sudo apt-get install -y clang-16
       - name: Set up Pgrx
         run: |
           # pg_config
@@ -83,10 +90,22 @@ jobs:
           mkdir -p ~/.pgrx_binding
           cp ./vendor/pgrx_binding/pg${VERSION}_$(uname --machine)-unknown-linux-gnu.rs ~/.pgrx_binding/pg${VERSION}_raw_bindings.rs
           echo PGRX_TARGET_INFO_PATH_PG$VERSION=$HOME/.pgrx_binding >> "$GITHUB_ENV"
-      - name: Clippy
-        run: cargo clippy --features "pg$VERSION" --target $ARCH-unknown-linux-gnu
       - name: Build
-        run: cargo build --lib --features "pg$VERSION" --target $ARCH-unknown-linux-gnu
+        run: |
+          cargo build --lib --no-default-features --features pg$VERSION --release --target $ARCH-unknown-linux-gnu
+          ./tools/schema.sh --no-default-features --features pg$VERSION --release --target $ARCH-unknown-linux-gnu | expand -t 4 > ./target/pg_bestmatch--$SEMVER.sql
+      - name: Package
+        run: |
+          export PLATFORM=$(echo $ARCH | sed 's/aarch64/arm64/; s/x86_64/amd64/')
+          ./scripts/package.sh
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          export TAG=${{ github.event.inputs.tag }}
+          export PLATFORM=$(echo $ARCH | sed 's/aarch64/arm64/; s/x86_64/amd64/')
+          gh release upload --clobber $TAG ./build/pg_bestmatch-pg${VERSION}_${ARCH}-unknown-linux-gnu_${SEMVER}.zip
+          gh release upload --clobber $TAG ./build/pg_bestmatch-pg${VERSION}_${SEMVER}_${PLATFORM}.deb
       - name: Post Set up Cache
         uses: actions/cache/save@v4
         if: ${{ !steps.cache.outputs.cache-hit }}
