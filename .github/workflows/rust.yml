@@ -38,7 +38,12 @@ jobs:
     strategy:
       matrix:
         version: [12, 13, 14, 15, 16]
+        arch: ["x86_64"]
     runs-on: ubuntu-latest
+    env:
+      SEMVER: "0.0.0"
+      VERSION: ${{ matrix.version }}
+      ARCH: ${{ matrix.arch }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,20 +52,45 @@ jobs:
           sudo apt-get remove -y '^postgres.*' '^libpq.*' '^clang.*' '^llvm.*' '^libclang.*' '^libllvm.*' '^mono-llvm.*'
           sudo apt-get purge -y '^postgres.*' '^libpq.*' '^clang.*' '^llvm.*' '^libclang.*' '^libllvm.*' '^mono-llvm.*'
           sudo apt-get update
-          sudo apt-get install -y build-essential
+          sudo apt-get install -y build-essential crossbuild-essential-arm64
+          sudo apt-get install -y qemu-user-static
+          touch ~/.cargo/config.toml
+          echo 'target.aarch64-unknown-linux-gnu.linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
+          echo 'target.aarch64-unknown-linux-gnu.runner = ["qemu-aarch64-static", "-L", "/usr/aarch64-linux-gnu"]' >> ~/.cargo/config.toml
       - name: Set up Sccache
         uses: mozilla-actions/sccache-action@v0.0.4
-      - name: Set up PostgreSQL
-        run: |
-          sudo apt-get install -y postgresql-common
-          echo | sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
-          sudo apt update
-          sudo apt-get install -y postgresql-${{ matrix.version }} postgresql-server-dev-${{ matrix.version }}
+      - name: Set up Cache
+        uses: actions/cache/restore@v4
+        id: cache
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ github.job }}-${{ hashFiles('./Cargo.lock') }}-${{ matrix.version }}-${{ matrix.arch }}
       - name: Set up Pgrx
         run: |
-          cargo install cargo-pgrx --debug --branch v0.12.0-alpha.1-patch2 --git https://github.com/tensorchord/pgrx.git
-          cargo pgrx init --pg${{ matrix.version }}=$(which pg_config)
+          # pg_config
+          mkdir -p ~/.pg_config
+          touch ~/.pg_config/pg_config
+          chmod 777 ~/.pg_config/pg_config
+          echo "#!/usr/bin/env bash" >> ~/.pg_config/pg_config
+          echo "$(pwd)/tools/pg_config.sh \"\$@\" < $(pwd)/vendor/pg_config/pg${VERSION}_${ARCH}-unknown-linux-gnu.txt" >> ~/.pg_config/pg_config
+          mkdir -p ~/.pgrx && echo "configs.pg$VERSION=\"$HOME/.pg_config/pg_config\"" > ~/.pgrx/config.toml
+          # pgrx_binding
+          mkdir -p ~/.pgrx_binding
+          cp ./vendor/pgrx_binding/pg${VERSION}_$(uname --machine)-unknown-linux-gnu.rs ~/.pgrx_binding/pg${VERSION}_raw_bindings.rs
+          echo PGRX_TARGET_INFO_PATH_PG$VERSION=$HOME/.pgrx_binding >> "$GITHUB_ENV"
       - name: Clippy
-        run: cargo clippy --lib --features "pg${{ matrix.version }}"
+        run: cargo clippy --features "pg$VERSION" --target $ARCH-unknown-linux-gnu
       - name: Build
-        run: cargo build --lib --features "pg${{ matrix.version }}"
+        run: cargo build --lib --features "pg$VERSION" --target $ARCH-unknown-linux-gnu
+      - name: Post Set up Cache
+        uses: actions/cache/save@v4
+        if: ${{ !steps.cache.outputs.cache-hit }}
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ github.job }}-${{ hashFiles('./Cargo.lock') }}-${{ matrix.version }}-${{ matrix.arch }}
