@@ -73,7 +73,7 @@ DECLARE
     upd_docs INT;
     upd_dims INT;
 BEGIN
-    SELECT attrelid, attname INTO tab, col FROM bm_catalog.bm25 WHERE matrelid = mat;
+    SELECT attrelid, attname INTO tab, col FROM bm_catalog.pg_bm25 WHERE matrelid = mat;
     EXECUTE format('REFRESH MATERIALIZED VIEW %s', mat);
     EXECUTE format('SELECT sum(how_many_tokens) FROM %s', mat) INTO upd_words;
     EXECUTE format('SELECT count(%s) FROM %s', col, tab) INTO upd_docs;
