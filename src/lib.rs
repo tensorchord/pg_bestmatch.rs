@@ -34,7 +34,7 @@ pub fn tokenize(t: &str) -> Vec<String> {
 #[derive(Debug)]
 #[repr(C)]
 struct RecordMat {
-    token: [u8; 64],
+    token: [u8; pgrx::pg_sys::NAMEDATALEN as usize],
     id: i32,
     how_many_tokens: i32,
     idf: f32,
