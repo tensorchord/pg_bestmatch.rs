@@ -22,8 +22,9 @@ lazy_static = "1.4.0"
 pgrx = { version = "=0.12.0-alpha.1", default-features = false, features = [] }
 rand = "0.8.5"
 tokenizers = { version = "0.19.1", default-features = false, features = [
-    "onig",
+    "onig", "http", 
 ] }
+jieba-rs = "0.7.0"
 
 [patch.crates-io]
 pgrx = { git = "https://github.com/tensorchord/pgrx.git", branch = "v0.12.0-alpha.1-patch2" }

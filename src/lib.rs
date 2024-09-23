@@ -1,3 +1,5 @@
+mod tokenizer;
+
 pgrx::pg_module_magic!();
 pgrx::extension_sql_file!("./sql/finalize.sql", finalize);
 
@@ -17,18 +19,9 @@ compiler_error!("PostgreSQL version must be selected.");
 #[pgrx::pg_guard]
 unsafe extern "C" fn _PG_init() {}
 
-static BERT_BASE_UNCASED_BYTES: &[u8] = include_bytes!("../tokenizer/bert_base_uncased.json");
-lazy_static::lazy_static! {
-    static ref BERT_BASE_UNCASED: tokenizers::Tokenizer = tokenizers::Tokenizer::from_bytes(BERT_BASE_UNCASED_BYTES).unwrap();
-}
-
 #[pgrx::pg_extern(immutable, strict, parallel_safe)]
-pub fn tokenize(t: &str) -> Vec<String> {
-    BERT_BASE_UNCASED
-        .encode(t, false)
-        .expect("failed to tokenize")
-        .get_tokens()
-        .to_vec()
+pub fn tokenize(t: &str, tokenizer: &str, model: Option<&str>) -> Vec<String> {
+    tokenizer::get_tokenizer(tokenizer, model).tokenize(t)
 }
 
 #[derive(Debug)]
@@ -52,9 +45,11 @@ pub fn bm25_document_to_svector_internal(
     dims: i32,
     t: &str,
     style: &str,
+    tokenizer: &str,
+    model: Option<&str>,
 ) -> String {
     use std::collections::BTreeMap;
-    let tokens = tokenize(t);
+    let tokens = tokenize(t, tokenizer, model);
     let mut x = BTreeMap::<u32, u32>::new();
     unsafe {
         use pgrx::pg_sys::*;
@@ -150,9 +145,11 @@ pub fn bm25_query_to_svector_internal(
     dims: i32,
     t: &str,
     style: &str,
+    tokenizer: &str,
+    model: Option<&str>,
 ) -> String {
     use std::collections::BTreeMap;
-    let tokens = tokenize(t);
+    let tokens = tokenize(t, tokenizer, model);
     let mut x = BTreeMap::<u32, f32>::new();
     unsafe {
         use pgrx::pg_sys::*;
