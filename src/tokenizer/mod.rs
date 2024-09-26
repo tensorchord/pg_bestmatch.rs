@@ -88,13 +88,7 @@ pub fn tokenize(tokenizer: &str, model: Option<&str>, s: &str) -> Vec<String> {
 
             return hf_lock
                 .entry(selected_model.to_string())
-                .or_insert_with(|| match tokenizer {
-                    "ws" => Box::new(WhitespaceTokenizer),
-                    "hf" => Box::new(HFTokenizer::new(selected_model)),
-                    "jieba" => Box::new(JiebaTokenizer::new()),
-                    "tiniestsegmenter" => Box::new(TiniestsegmenterTokenizer),
-                    _ => panic!("Unknown tokenizer"),
-                })
+                .or_insert_with(|| Box::new(HFTokenizer::new(selected_model)))
                 .tokenize(s);
         }
         "jieba" => JIEBA_TOKENIZER.get_or_init(|| Box::new(JiebaTokenizer::new())),
