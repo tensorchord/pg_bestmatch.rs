@@ -1,19 +1,22 @@
-use std::sync::OnceLock;
+use std::{
+    collections::HashMap,
+    sync::{Mutex, OnceLock},
+};
 
-pub struct WhitespaceTokenizer;
+struct WhitespaceTokenizer;
 
-pub struct HFTokenizer {
+struct HFTokenizer {
     tokenizer: tokenizers::Tokenizer,
 }
 
-pub struct JiebaTokenizer {
+struct JiebaTokenizer {
     jeiba: jieba_rs::Jieba,
 }
 
-pub struct TiniestsegmenterTokenizer;
+struct TiniestsegmenterTokenizer;
 
 impl JiebaTokenizer {
-    pub fn new() -> JiebaTokenizer {
+    fn new() -> JiebaTokenizer {
         JiebaTokenizer {
             jeiba: jieba_rs::Jieba::new(),
         }
@@ -68,25 +71,40 @@ impl Tokenize for TiniestsegmenterTokenizer {
 
 type PostgresTokenizer = Box<dyn Tokenize + Sync + Send>;
 
-pub fn get_tokenizer(tokenizer: &str, model: Option<&str>) -> &'static PostgresTokenizer {
-    static HF_TOKENIZER: OnceLock<PostgresTokenizer> = OnceLock::new();
+pub fn tokenize(tokenizer: &str, model: Option<&str>, s: &str) -> Vec<String> {
+    static HF_TOKENIZER: OnceLock<Mutex<HashMap<String, PostgresTokenizer>>> = OnceLock::new();
     static JIEBA_TOKENIZER: OnceLock<PostgresTokenizer> = OnceLock::new();
     static TINIESTSEGMENTER_TOKENIZER: OnceLock<PostgresTokenizer> = OnceLock::new();
     static WHITESPACE_TOKENIZER: OnceLock<PostgresTokenizer> = OnceLock::new();
 
-    match tokenizer {
+    let selected_tokenizer = match tokenizer {
         "ws" => WHITESPACE_TOKENIZER.get_or_init(|| Box::new(WhitespaceTokenizer)),
-        "hf" => HF_TOKENIZER.get_or_init(|| {
-            Box::new(HFTokenizer::new(
-                model.expect("Model path must be provided"),
-            ))
-        }),
+        "hf" => {
+            let selected_model = model.expect("model must be provided for hf tokenizer");
+            let mut hf_lock = HF_TOKENIZER
+                .get_or_init(|| Mutex::new(HashMap::new()))
+                .lock()
+                .expect("couldn't lock mutex");
+
+            return hf_lock
+                .entry(selected_model.to_string())
+                .or_insert_with(|| match tokenizer {
+                    "ws" => Box::new(WhitespaceTokenizer),
+                    "hf" => Box::new(HFTokenizer::new(selected_model)),
+                    "jieba" => Box::new(JiebaTokenizer::new()),
+                    "tiniestsegmenter" => Box::new(TiniestsegmenterTokenizer),
+                    _ => panic!("Unknown tokenizer"),
+                })
+                .tokenize(s);
+        }
         "jieba" => JIEBA_TOKENIZER.get_or_init(|| Box::new(JiebaTokenizer::new())),
         "tiniestsegmenter" => {
             TINIESTSEGMENTER_TOKENIZER.get_or_init(|| Box::new(TiniestsegmenterTokenizer))
         }
         _ => panic!("Unknown tokenizer"),
-    }
+    };
+
+    selected_tokenizer.tokenize(s)
 }
 
 #[cfg(test)]
@@ -95,7 +113,7 @@ mod tests {
     #[test]
     fn test_whitespace_tokenizer() {
         assert_eq!(
-            super::get_tokenizer("ws", None).tokenize("i have an apple"),
+            *super::tokenize("ws", None, "i have an apple"),
             vec!["i", "have", "an", "apple"]
         );
     }
@@ -103,7 +121,17 @@ mod tests {
     #[test]
     fn test_hftokenizer() {
         assert_eq!(
-            super::get_tokenizer("hf", Some("bert-base-uncased")).tokenize("i have an apple"),
+            super::tokenize("hf", Some("bert-base-uncased"), "i have an apple"),
+            vec!["i", "have", "an", "apple"]
+        );
+
+        assert_eq!(
+            super::tokenize("hf", Some("google-t5/t5-base"), "i have an apple"),
+            vec!["▁", "i", "▁have", "▁an", "▁apple"]
+        );
+
+        assert_eq!(
+            super::tokenize("hf", Some("bert-base-uncased"), "i have an apple"),
             vec!["i", "have", "an", "apple"]
         );
     }
@@ -111,7 +139,7 @@ mod tests {
     #[test]
     fn test_jieba() {
         assert_eq!(
-            super::get_tokenizer("jieba", None).tokenize("测试版本将于秋季推出。"),
+            super::tokenize("jieba", None, "测试版本将于秋季推出。"),
             vec!["测试", "版本", "将", "于", "秋季", "推出", "。"]
         );
     }
@@ -119,8 +147,11 @@ mod tests {
     #[test]
     fn test_tiniestsegmenter() {
         assert_eq!(
-            super::get_tokenizer("tiniestsegmenter", None)
-                .tokenize("今作の主人公はリンクではなくゼルダ姫"),
+            super::tokenize(
+                "tiniestsegmenter",
+                None,
+                "今作の主人公はリンクではなくゼルダ姫"
+            ),
             vec![
                 "今作",
                 "の",

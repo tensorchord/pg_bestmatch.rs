@@ -21,7 +21,7 @@ unsafe extern "C" fn _PG_init() {}
 
 #[pgrx::pg_extern(immutable, strict, parallel_safe)]
 pub fn tokenize(t: &str, tokenizer: &str, model: Option<&str>) -> Vec<String> {
-    tokenizer::get_tokenizer(tokenizer, model).tokenize(t)
+    tokenizer::tokenize(tokenizer, model, t)
 }
 
 #[derive(Debug)]
