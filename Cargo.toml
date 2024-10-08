@@ -18,10 +18,14 @@ pg15 = ["pgrx/pg15"]
 pg16 = ["pgrx/pg16"]
 
 [dependencies]
+jieba-rs = "0.7.0"
 lazy_static = "1.4.0"
 pgrx = { version = "=0.12.0-alpha.1", default-features = false, features = [] }
 rand = "0.8.5"
+"tiktoken-rs" = "0.5.9"
+tiniestsegmenter = "0.3.0"
 tokenizers = { version = "0.19.1", default-features = false, features = [
+    "http",
     "onig",
 ] }
 

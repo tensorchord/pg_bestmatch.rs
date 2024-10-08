@@ -11,13 +11,15 @@ CREATE TABLE pg_bm25(
     -- props
     b REAL NOT NULL,
     k1 REAL NOT NULL,
+    tokenizer TEXT NOT NULL,
+    model TEXT NOT NULL,
     -- cached
     words INT NOT NULL,
     docs INT NOT NULL,
     dims INT NOT NULL
 );
 
-CREATE FUNCTION bm25_create(tab regclass, col TEXT, mat TEXT, b REAL DEFAULT 0.75, k1 REAL DEFAULT 1.2) RETURNS VOID AS $fn$
+CREATE FUNCTION bm25_create(tab regclass, col TEXT, mat TEXT, tokenizer TEXT DEFAULT 'hf', model TEXT DEFAULT 'google-bert/bert-base-uncased', b REAL DEFAULT 0.75, k1 REAL DEFAULT 1.2) RETURNS VOID AS $fn$
 DECLARE
     test TEXT;
     ins_words INT;
@@ -31,7 +33,7 @@ BEGIN
     EXECUTE format($$
         CREATE MATERIALIZED VIEW %s AS
             WITH
-                inputs AS (SELECT bm_catalog.tokenize(%s) AS input FROM %s),
+                inputs AS (SELECT bm_catalog.tokenize(%s, %L, %L) AS input FROM %s),
                 tokens AS (SELECT unnest(input)::NAME COLLATE "C" AS token FROM inputs GROUP BY token ORDER BY token),
                 compute_how_many_tokens AS (
                     SELECT unnest(input)::NAME COLLATE "C" AS t, count(*)::INT AS how_many_tokens
@@ -56,12 +58,12 @@ BEGIN
             JOIN compute_token_in_how_many_inputs ON compute_token_in_how_many_inputs.t = token
             CROSS JOIN var_docs;
         CREATE INDEX %s_index ON %s(token);
-    $$, mat, col, tab, mat, mat);
+    $$, mat, col, tokenizer, model, tab, mat, mat);
     EXECUTE format('SELECT sum(how_many_tokens) FROM %s', mat) INTO ins_words;
     EXECUTE format('SELECT count(%s) FROM %s', col, tab) INTO ins_docs;
     EXECUTE format('SELECT count(*) FROM %s', mat) INTO ins_dims;
     INSERT INTO bm_catalog.pg_bm25
-    VALUES (tab, col, mat::regclass, (mat::text || '_index')::regclass, b, k1, ins_words, ins_docs, ins_dims);
+    VALUES (tab, col, mat::regclass, (mat::text || '_index')::regclass, b, k1, tokenizer, model, ins_words, ins_docs, ins_dims);
 END;
 $fn$ LANGUAGE plpgsql;
 
@@ -92,7 +94,7 @@ BEGIN
 END;
 $fn$ LANGUAGE plpgsql;
 
-CREATE FUNCTION bm25_document_to_svector(mat regclass, t TEXT, style TEXT DEFAULT 'pgvecto.rs') RETURNS text STABLE STRICT PARALLEL SAFE AS $fn$
+CREATE FUNCTION bm25_document_to_svector(mat regclass, t TEXT, tokenizer TEXT, model TEXT, style TEXT DEFAULT 'pgvecto.rs') RETURNS text STABLE STRICT PARALLEL SAFE AS $fn$
 DECLARE
     idx regclass;
     p_b REAL;
@@ -102,16 +104,16 @@ DECLARE
     p_dims INT;
 BEGIN
     SELECT indexrelid, b, k1, words, docs, dims INTO idx, p_b, p_k1, p_words, p_docs, p_dims FROM bm_catalog.pg_bm25 WHERE matrelid = mat;
-    RETURN bm_catalog.bm25_document_to_svector_internal(mat::oid, idx::oid, p_b, p_k1, p_words, p_docs, p_dims, t, style);
+    RETURN bm_catalog.bm25_document_to_svector_internal(mat::oid, idx::oid, p_b, p_k1, p_words, p_docs, p_dims, t, style, tokenizer, model);
 END;
 $fn$ LANGUAGE plpgsql;
 
-CREATE FUNCTION bm25_query_to_svector(mat regclass, t TEXT, style TEXT DEFAULT 'pgvecto.rs') RETURNS text STABLE STRICT PARALLEL SAFE AS $fn$
+CREATE FUNCTION bm25_query_to_svector(mat regclass, t TEXT, tokenizer TEXT, model TEXT, style TEXT DEFAULT 'pgvecto.rs') RETURNS text STABLE STRICT PARALLEL SAFE AS $fn$
 DECLARE
     idx regclass;
     p_dims INT;
 BEGIN
     SELECT indexrelid, dims INTO idx, p_dims FROM bm_catalog.pg_bm25 WHERE matrelid = mat;
-    RETURN bm_catalog.bm25_query_to_svector_internal(mat::oid, idx::oid, p_dims, t, style);
+    RETURN bm_catalog.bm25_query_to_svector_internal(mat::oid, idx::oid, p_dims, t, style, tokenizer, model);
 END;
 $fn$ LANGUAGE plpgsql;
