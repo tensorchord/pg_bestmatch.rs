@@ -94,7 +94,7 @@ BEGIN
 END;
 $fn$ LANGUAGE plpgsql;
 
-CREATE FUNCTION bm25_document_to_svector(mat regclass, t TEXT, tokenizer TEXT, model TEXT, style TEXT DEFAULT 'pgvecto.rs') RETURNS text STABLE STRICT PARALLEL SAFE AS $fn$
+CREATE FUNCTION bm25_document_to_svector(mat regclass, t TEXT, style TEXT DEFAULT 'pgvecto.rs') RETURNS text STABLE STRICT PARALLEL SAFE AS $fn$
 DECLARE
     idx regclass;
     p_b REAL;
@@ -102,18 +102,22 @@ DECLARE
     p_words INT;
     p_docs INT;
     p_dims INT;
+    p_tokenizer TEXT;
+    p_model TEXT;
 BEGIN
-    SELECT indexrelid, b, k1, words, docs, dims INTO idx, p_b, p_k1, p_words, p_docs, p_dims FROM bm_catalog.pg_bm25 WHERE matrelid = mat;
-    RETURN bm_catalog.bm25_document_to_svector_internal(mat::oid, idx::oid, p_b, p_k1, p_words, p_docs, p_dims, t, style, tokenizer, model);
+    SELECT indexrelid, b, k1, words, docs, dims, tokenizer, model INTO idx, p_b, p_k1, p_words, p_docs, p_dims, p_tokenizer, p_model FROM bm_catalog.pg_bm25 WHERE matrelid = mat;
+    RETURN bm_catalog.bm25_document_to_svector_internal(mat::oid, idx::oid, p_b, p_k1, p_words, p_docs, p_dims, t, style, p_tokenizer, p_model);
 END;
 $fn$ LANGUAGE plpgsql;
 
-CREATE FUNCTION bm25_query_to_svector(mat regclass, t TEXT, tokenizer TEXT, model TEXT, style TEXT DEFAULT 'pgvecto.rs') RETURNS text STABLE STRICT PARALLEL SAFE AS $fn$
+CREATE FUNCTION bm25_query_to_svector(mat regclass, t TEXT, style TEXT DEFAULT 'pgvecto.rs') RETURNS text STABLE STRICT PARALLEL SAFE AS $fn$
 DECLARE
     idx regclass;
     p_dims INT;
+    p_tokenizer TEXT;
+    p_model TEXT;
 BEGIN
-    SELECT indexrelid, dims INTO idx, p_dims FROM bm_catalog.pg_bm25 WHERE matrelid = mat;
-    RETURN bm_catalog.bm25_query_to_svector_internal(mat::oid, idx::oid, p_dims, t, style, tokenizer, model);
+    SELECT indexrelid, dims, tokenizer, model INTO idx, p_dims, p_tokenizer, p_model FROM bm_catalog.pg_bm25 WHERE matrelid = mat;
+    RETURN bm_catalog.bm25_query_to_svector_internal(mat::oid, idx::oid, p_dims, t, style, p_tokenizer, p_model);
 END;
 $fn$ LANGUAGE plpgsql;
