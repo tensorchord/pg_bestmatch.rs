@@ -11,9 +11,10 @@ compile_error!("Target is not supported.");
     feature = "pg13",
     feature = "pg14",
     feature = "pg15",
-    feature = "pg16"
+    feature = "pg16",
+    feature = "pg17"
 )))]
-compiler_error!("PostgreSQL version must be selected.");
+compile_error!("PostgreSQL version must be selected.");
 
 #[allow(non_snake_case)]
 #[pgrx::pg_guard]
