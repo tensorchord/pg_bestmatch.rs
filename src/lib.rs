@@ -11,9 +11,10 @@ compile_error!("Target is not supported.");
     feature = "pg13",
     feature = "pg14",
     feature = "pg15",
-    feature = "pg16"
+    feature = "pg16",
+    feature = "pg17"
 )))]
-compiler_error!("PostgreSQL version must be selected.");
+compile_error!("PostgreSQL version must be selected.");
 
 #[allow(non_snake_case)]
 #[pgrx::pg_guard]
@@ -70,7 +71,7 @@ pub fn bm25_document_to_svector_internal(
                     token.as_ptr().into(),
                 );
                 index_rescan(scan, &mut key, 1, std::ptr::null_mut(), 0);
-                if index_getnext_slot(scan, ScanDirection_ForwardScanDirection, slot) {
+                if index_getnext_slot(scan, ScanDirection::ForwardScanDirection, slot) {
                     let mut should_free = false;
                     let tuple = ExecFetchSlotHeapTuple(slot, false, &mut should_free);
                     debug_assert!(!tuple.is_null());
@@ -169,7 +170,7 @@ pub fn bm25_query_to_svector_internal(
                     token.as_ptr().into(),
                 );
                 index_rescan(scan, &mut key, 1, std::ptr::null_mut(), 0);
-                if index_getnext_slot(scan, ScanDirection_ForwardScanDirection, slot) {
+                if index_getnext_slot(scan, ScanDirection::ForwardScanDirection, slot) {
                     let mut should_free = false;
                     let tuple = ExecFetchSlotHeapTuple(slot, false, &mut should_free);
                     debug_assert!(!tuple.is_null());

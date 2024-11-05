@@ -16,11 +16,12 @@ pg13 = ["pgrx/pg13"]
 pg14 = ["pgrx/pg14"]
 pg15 = ["pgrx/pg15"]
 pg16 = ["pgrx/pg16"]
+pg17 = ["pgrx/pg17"]
 
 [dependencies]
 jieba-rs = "0.7.0"
 lazy_static = "1.4.0"
-pgrx = { version = "=0.12.0-alpha.1", default-features = false, features = [] }
+pgrx = { version = "=0.12.7", default-features = false, features = [] }
 rand = "0.8.5"
 "tiktoken-rs" = "0.5.9"
 tiniestsegmenter = "0.3.0"
@@ -28,6 +29,3 @@ tokenizers = { version = "0.19.1", default-features = false, features = [
     "http",
     "onig",
 ] }
-
-[patch.crates-io]
-pgrx = { git = "https://github.com/tensorchord/pgrx.git", branch = "v0.12.0-alpha.1-patch2" }
