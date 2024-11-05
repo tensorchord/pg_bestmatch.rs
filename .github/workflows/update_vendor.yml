@@ -26,30 +26,29 @@ jobs:
         run: |
           export PGRX_VERSION=$(grep 'pgrx = { version =' Cargo.toml | sed -E 's/.*version = "=([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
           docker run --rm --platform linux/amd64 -v ./:/mnt/build \
-            -e "VERSION=12" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh &
+            -e "VERSION=12" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
           docker run --rm --platform linux/amd64 -v ./:/mnt/build \
-            -e "VERSION=13" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh &
+            -e "VERSION=13" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
           docker run --rm --platform linux/amd64 -v ./:/mnt/build \
-            -e "VERSION=14" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh &
+            -e "VERSION=14" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
           docker run --rm --platform linux/amd64 -v ./:/mnt/build \
-            -e "VERSION=15" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh &
+            -e "VERSION=15" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
           docker run --rm --platform linux/amd64 -v ./:/mnt/build \
-            -e "VERSION=16" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh &
+            -e "VERSION=16" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
           docker run --rm --platform linux/amd64 -v ./:/mnt/build \
-            -e "VERSION=17" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh &
+            -e "VERSION=17" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
           docker run --rm --platform linux/arm64 -v ./:/mnt/build \
-            -e "VERSION=12" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh &
+            -e "VERSION=12" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
           docker run --rm --platform linux/arm64 -v ./:/mnt/build \
-            -e "VERSION=13" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh &
+            -e "VERSION=13" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
           docker run --rm --platform linux/arm64 -v ./:/mnt/build \
-            -e "VERSION=14" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh &
+            -e "VERSION=14" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
           docker run --rm --platform linux/arm64 -v ./:/mnt/build \
-            -e "VERSION=15" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh &
+            -e "VERSION=15" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
           docker run --rm --platform linux/arm64 -v ./:/mnt/build \
-            -e "VERSION=16" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh &
+            -e "VERSION=16" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
           docker run --rm --platform linux/arm64 -v ./:/mnt/build \
-            -e "VERSION=17" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh &
-          wait
+            -e "VERSION=17" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
           sudo chown -R $USER ./vendor
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
