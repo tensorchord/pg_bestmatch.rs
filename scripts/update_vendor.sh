@@ -2,7 +2,7 @@
 set -e
 
 printf "VERSION = ${VERSION}\n"
-printf "BRANCH = ${BRANCH}\n"
+printf "PGRX_VERSION = ${PGRX_VERSION}\n"
 
 apt-get update
 apt-get install -y --no-install-recommends ca-certificates curl build-essential gnupg lsb-release wget git
@@ -18,7 +18,7 @@ source ~/.cargo/env
 cd $(mktemp -d)
 
 cargo init --lib --name vectors
-cargo add pgrx-pg-sys --git https://github.com/tensorchord/pgrx.git --branch $BRANCH --no-default-features --features pg$VERSION
+cargo add pgrx-pg-sys@$PGRX_VERSION --no-default-features --features pg$VERSION
 PGRX_PG_CONFIG_PATH=$(which pg_config) PGRX_PG_SYS_EXTRA_OUTPUT_PATH=$(pwd)/pgrx-binding.rs cargo build
 rustfmt ./pgrx-binding.rs
 
