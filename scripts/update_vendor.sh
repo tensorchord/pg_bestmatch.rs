@@ -18,7 +18,7 @@ source ~/.cargo/env
 cd $(mktemp -d)
 
 cargo init --lib --name vectors
-cargo add pgrx-pg-sys@$PGRX_VERSION --no-default-features --features pg$VERSION
+cargo add pgrx-pg-sys@=$PGRX_VERSION --no-default-features --features pg$VERSION
 PGRX_PG_CONFIG_PATH=$(which pg_config) PGRX_PG_SYS_EXTRA_OUTPUT_PATH=$(pwd)/pgrx-binding.rs cargo build
 rustfmt ./pgrx-binding.rs
 
