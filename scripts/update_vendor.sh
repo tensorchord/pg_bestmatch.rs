@@ -19,8 +19,8 @@ cd $(mktemp -d)
 
 cargo init --lib --name vectors
 cargo add pgrx-pg-sys@=$PGRX_VERSION --no-default-features --features pg$VERSION
-PGRX_PG_CONFIG_PATH=$(which pg_config) PGRX_PG_SYS_EXTRA_OUTPUT_PATH=$(pwd)/pgrx-binding.rs cargo build
+PGRX_PG_CONFIG_PATH="/usr/lib/postgresql/$VERSION/bin/pg_config" PGRX_PG_SYS_EXTRA_OUTPUT_PATH=$(pwd)/pgrx-binding.rs cargo build
 rustfmt ./pgrx-binding.rs
 
 cp ./pgrx-binding.rs /mnt/build/vendor/pgrx_binding/pg${VERSION}_$(uname --machine)-unknown-linux-gnu.rs
-pg_config > /mnt/build/vendor/pg_config/pg${VERSION}_$(uname --machine)-unknown-linux-gnu.txt
+"/usr/lib/postgresql/$VERSION/bin/pg_config" > /mnt/build/vendor/pg_config/pg${VERSION}_$(uname --machine)-unknown-linux-gnu.txt

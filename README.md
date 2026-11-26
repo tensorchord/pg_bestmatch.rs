@@ -123,12 +123,12 @@ This workflow showcases how to leverage BM25 text queries and vector search in P
 
 ## Build from source
 
-Before building, you should have `PostgreSQL`, `Rust` and `Cargo` installed on your system.
+Install PostgreSQL 15–19 and Rust 1.99.1 or later.
 
 1. Install `cargo-pgrx`.
 
 ```sh
-cargo install cargo-pgrx --version v0.12.0-alpha.1
+cargo install cargo-pgrx --version 0.20.1 --locked
 ```
 
 2. Initialize `cargo-pgrx`.

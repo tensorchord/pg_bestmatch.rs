@@ -21,7 +21,7 @@ env:
   RUST_BACKTRACE: 1
   SCCACHE_GHA_ENABLED: true
   RUSTC_WRAPPER: sccache
-  RUSTFLAGS: "-Dwarnings"
+  RUSTFLAGS: "-Dwarnings -C link-arg=-Wl,--no-gc-sections"
 
 permissions:
   contents: write
@@ -41,9 +41,14 @@ jobs:
   binary:
     strategy:
       matrix:
-        version: [12, 13, 14, 15, 16, 17]
+        version: [15, 16, 17, 18, 19]
         arch: ["x86_64", "aarch64"]
-    runs-on: ubuntu-20.04
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     env:
       SEMVER: ${{ github.event.inputs.version }}
       VERSION: ${{ matrix.version }}
@@ -52,15 +57,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set up Environment
+      - name: Install PostgreSQL development headers
         run: |
-          sudo apt-get remove -y '^postgres.*' '^libpq.*' '^clang.*' '^llvm.*' '^libclang.*' '^libllvm.*' '^mono-llvm.*'
-          sudo apt-get purge -y '^postgres.*' '^libpq.*' '^clang.*' '^llvm.*' '^libclang.*' '^libllvm.*' '^mono-llvm.*'
           sudo apt-get update
-          sudo apt-get install -y build-essential crossbuild-essential-arm64
-          sudo apt-get install -y qemu-user-static
-          echo 'target.aarch64-unknown-linux-gnu.linker = "aarch64-linux-gnu-gcc"' | tee ~/.cargo/config.toml
-          rustup target add aarch64-unknown-linux-gnu
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y "postgresql-server-dev-$VERSION" libclang-dev
+          echo "PGRX_PG_CONFIG_PATH=/usr/lib/postgresql/$VERSION/bin/pg_config" >> "$GITHUB_ENV"
       - name: Set up Sccache
         uses: mozilla-actions/sccache-action@v0.0.4
       - name: Set up Cache
@@ -72,23 +75,12 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
           key: ${{ github.job }}-${{ hashFiles('./Cargo.lock') }}-${{ matrix.version }}-${{ matrix.arch }}
-      - name: Set up Pgrx
-        run: |
-          # pg_config
-          mkdir -p ~/.pg_config
-          touch ~/.pg_config/pg_config
-          chmod 777 ~/.pg_config/pg_config
-          echo "#!/usr/bin/env bash" >> ~/.pg_config/pg_config
-          echo "$(pwd)/tools/pg_config.sh \"\$@\" < $(pwd)/vendor/pg_config/pg${VERSION}_${ARCH}-unknown-linux-gnu.txt" >> ~/.pg_config/pg_config
-          mkdir -p ~/.pgrx && echo "configs.pg$VERSION=\"$HOME/.pg_config/pg_config\"" > ~/.pgrx/config.toml
-          # pgrx_binding
-          mkdir -p ~/.pgrx_binding
-          cp ./vendor/pgrx_binding/pg${VERSION}_$(uname --machine)-unknown-linux-gnu.rs ~/.pgrx_binding/pg${VERSION}_raw_bindings.rs
-          echo PGRX_TARGET_INFO_PATH_PG$VERSION=$HOME/.pgrx_binding >> "$GITHUB_ENV"
+      - name: Install cargo-pgrx
+        run: cargo install cargo-pgrx --version 0.20.1 --locked
       - name: Build
         run: |
-          cargo build --lib --features pg$VERSION --release --target $ARCH-unknown-linux-gnu
-          ./tools/schema.sh --features pg$VERSION --release --target $ARCH-unknown-linux-gnu | expand -t 4 > ./target/pg_bestmatch--$SEMVER.sql
+          cargo build --locked --lib --features pg$VERSION --release --target $ARCH-unknown-linux-gnu
+          ./tools/schema.sh --pg-config "$PGRX_PG_CONFIG_PATH" --features pg$VERSION --release --target $ARCH-unknown-linux-gnu | expand -t 4 > ./target/pg_bestmatch--$SEMVER.sql
       - name: Package
         run: |
           export PLATFORM=$(echo $ARCH | sed 's/aarch64/arm64/; s/x86_64/amd64/')
