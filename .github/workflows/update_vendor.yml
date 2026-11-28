@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   generate:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,30 +25,12 @@ jobs:
       - name: Generate
         run: |
           export PGRX_VERSION=$(grep 'pgrx = { version =' Cargo.toml | sed -E 's/.*version = "=([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
-          docker run --rm --platform linux/amd64 -v ./:/mnt/build \
-            -e "VERSION=12" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
-          docker run --rm --platform linux/amd64 -v ./:/mnt/build \
-            -e "VERSION=13" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
-          docker run --rm --platform linux/amd64 -v ./:/mnt/build \
-            -e "VERSION=14" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
-          docker run --rm --platform linux/amd64 -v ./:/mnt/build \
-            -e "VERSION=15" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
-          docker run --rm --platform linux/amd64 -v ./:/mnt/build \
-            -e "VERSION=16" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
-          docker run --rm --platform linux/amd64 -v ./:/mnt/build \
-            -e "VERSION=17" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
-          docker run --rm --platform linux/arm64 -v ./:/mnt/build \
-            -e "VERSION=12" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
-          docker run --rm --platform linux/arm64 -v ./:/mnt/build \
-            -e "VERSION=13" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
-          docker run --rm --platform linux/arm64 -v ./:/mnt/build \
-            -e "VERSION=14" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
-          docker run --rm --platform linux/arm64 -v ./:/mnt/build \
-            -e "VERSION=15" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
-          docker run --rm --platform linux/arm64 -v ./:/mnt/build \
-            -e "VERSION=16" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
-          docker run --rm --platform linux/arm64 -v ./:/mnt/build \
-            -e "VERSION=17" -e "PGRX_VERSION=$PGRX_VERSION" debian:bookworm bash /mnt/build/scripts/update_vendor.sh
+          for arch in amd64 arm64; do
+            for version in 15 16 17 18 19; do
+              docker run --rm --platform "linux/$arch" -v "$PWD:/mnt/build" \
+                -e "VERSION=$version" -e PGRX_VERSION debian:bookworm bash /mnt/build/scripts/update_vendor.sh
+            done
+          done
           sudo chown -R $USER ./vendor
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6

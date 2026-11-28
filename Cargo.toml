@@ -6,22 +6,17 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "lib"]
 
-[[bin]]
-name = "pgrx_embed_pg_bestmatch"
-path = "./src/bin/pgrx_embed.rs"
-
 [features]
-pg12 = ["pgrx/pg12"]
-pg13 = ["pgrx/pg13"]
-pg14 = ["pgrx/pg14"]
 pg15 = ["pgrx/pg15"]
 pg16 = ["pgrx/pg16"]
 pg17 = ["pgrx/pg17"]
+pg18 = ["pgrx/pg18"]
+pg19 = ["pgrx/pg19"]
 
 [dependencies]
 jieba-rs = "0.7.0"
 lazy_static = "1.4.0"
-pgrx = { version = "=0.12.7", default-features = false, features = [] }
+pgrx = { version = "=0.20.1" }
 rand = "0.8.5"
 "tiktoken-rs" = "0.5.9"
 tiniestsegmenter = "0.3.0"

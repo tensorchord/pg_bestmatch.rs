@@ -7,18 +7,17 @@ pgrx::extension_sql_file!("./sql/finalize.sql", finalize);
 compile_error!("Target is not supported.");
 
 #[cfg(not(any(
-    feature = "pg12",
-    feature = "pg13",
-    feature = "pg14",
     feature = "pg15",
     feature = "pg16",
-    feature = "pg17"
+    feature = "pg17",
+    feature = "pg18",
+    feature = "pg19"
 )))]
 compile_error!("PostgreSQL version must be selected.");
 
 #[allow(non_snake_case)]
 #[pgrx::pg_guard]
-unsafe extern "C" fn _PG_init() {}
+unsafe extern "C-unwind" fn _PG_init() {}
 
 #[pgrx::pg_extern(immutable, strict, parallel_safe)]
 pub fn tokenize(t: &str, tokenizer: &str, model: Option<&str>) -> Vec<String> {
@@ -32,6 +31,27 @@ struct RecordMat {
     id: i32,
     how_many_tokens: i32,
     idf: f32,
+}
+
+unsafe fn begin_token_scan(
+    heap: pgrx::pg_sys::Relation,
+    index: pgrx::pg_sys::Relation,
+) -> pgrx::pg_sys::IndexScanDesc {
+    use pgrx::pg_sys::{index_beginscan, GetActiveSnapshot};
+
+    let snapshot = unsafe { GetActiveSnapshot() };
+    #[cfg(any(feature = "pg15", feature = "pg16", feature = "pg17"))]
+    unsafe {
+        index_beginscan(heap, index, snapshot, 1, 0)
+    }
+    #[cfg(feature = "pg18")]
+    unsafe {
+        index_beginscan(heap, index, snapshot, std::ptr::null_mut(), 1, 0)
+    }
+    #[cfg(feature = "pg19")]
+    unsafe {
+        index_beginscan(heap, index, snapshot, std::ptr::null_mut(), 1, 0, 0)
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -59,7 +79,7 @@ pub fn bm25_document_to_svector_internal(
         let heap = table_open(mat, AccessShareLock as _);
         let index = index_open(idx, AccessShareLock as _);
         let slot = MakeSingleTupleTableSlot((*heap).rd_att, table_slot_callbacks(heap));
-        let scan = index_beginscan(heap, index, GetActiveSnapshot(), 1, 0);
+        let scan = begin_token_scan(heap, index);
         for token in tokens.iter() {
             if let Ok(token) = CString::new(token.as_str()) {
                 let mut key = std::mem::zeroed::<ScanKeyData>();
@@ -158,7 +178,7 @@ pub fn bm25_query_to_svector_internal(
         let heap = table_open(mat, AccessShareLock as _);
         let index = index_open(idx, AccessShareLock as _);
         let slot = MakeSingleTupleTableSlot((*heap).rd_att, table_slot_callbacks(heap));
-        let scan = index_beginscan(heap, index, GetActiveSnapshot(), 1, 0);
+        let scan = begin_token_scan(heap, index);
         for token in tokens.iter() {
             if let Ok(token) = CString::new(token.as_str()) {
                 let mut key = std::mem::zeroed::<ScanKeyData>();
